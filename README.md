@@ -18,8 +18,8 @@ Techniques of generic and optimized Image Classification using python and Tensor
 |    DeepSat-6 |             Slope is less for b-norm | 0.9729           | 0.9692        | Batch Norm   |
 |              | g-norm converges faster for training | 0.9704           | 0.9657        | Group Norm   |
 
-![alt text](https://raw.githubusercontent.com/sananand007/genericImageClassification/blob/master/gnVsbn_Accuracy.png)
-![alt text](https://raw.githubusercontent.com/sananand007/genericImageClassification/blob/master/gnVsbn_Loss.png)
+![alt text](https://github.com/sananand007/genericImageClassification/blob/master/gnVsbn_Accuracy.png)
+![alt text](https://github.com/sananand007/genericImageClassification/blob/master/gnVsbn_Loss.png)
 
 ## Requirements
  * Linux Ubuntu 18.04
