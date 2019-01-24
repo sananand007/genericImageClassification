@@ -15,6 +15,9 @@ import argparse
 import gc
 import h5py
 from collections import defaultdict
+from tensorflow.python.framework import ops
+from ops import norm
+
 
 FLAGS=None
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -350,6 +353,160 @@ class genImageCl(object):
 	    
 	    return tf.estimator.EstimatorSpec(mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
+	
+	'''
+	With Group Normalization + Fully connected
+	'''
+
+	def group_norm_wrapper(x, G=32, eps=1e-5, scope='group_norm') :
+	    with tf.variable_scope(scope) :
+	        N, H, W, C = x.get_shape().as_list()
+	        print("Value inside the wrapper", N, H, W, C)
+	        G = min(G, C)
+
+	        x = tf.reshape(x, [N, H, W, G, C // G])
+	        mean, var = tf.nn.moments(x, [1, 2, 4], keep_dims=True)
+	        x = (x - mean) / tf.sqrt(var + eps)
+
+	        gamma = tf.get_variable('gamma', [1, 1, 1, C], initializer=tf.constant_initializer(1.0))
+	        beta = tf.get_variable('beta', [1, 1, 1, C], initializer=tf.constant_initializer(0.0))
+
+
+	        x = tf.reshape(x, [N, H, W, C]) * gamma + beta
+
+	    return x
+
+	# Our application logic will be added here
+	def cnn_model_gn_fn(self,features, labels, mode, params, config):
+	    
+	    #Input layer
+	    input_layer = tf.reshape(features["x"], [-1, 28, 28, 4])
+	    
+	    # Convolutional Layer #1
+	    conv1=tf.layers.conv2d(
+	            inputs=input_layer,
+	            filters=32,
+	            kernel_size=[5,5],
+	            padding="same",
+	            activation=tf.nn.relu6)
+	    
+	    print("Shape Conv1:" + str(conv1.shape))
+	    
+	    # First Max Pooling layer
+	    pool1=tf.layers.max_pooling2d(inputs=conv1, pool_size=[2,2], strides=2) #strides=2 . Divide size by 2
+	    
+	    print("Shape Pool1:" + str(pool1.shape))
+	    
+	    # Convolutional Layer #2
+	    conv2=tf.layers.conv2d(
+	            inputs=pool1,
+	            filters=64,
+	            kernel_size=[5,5],
+	            padding="same",
+	            activation=tf.nn.relu6)
+	    
+	    print("Shape Conv2:" + str(conv2.shape))
+	    
+	    # Second Max Pooling layer
+	    pool2=tf.layers.max_pooling2d(inputs=conv2, pool_size=[2,2], strides=2) #strides=2 . Divide size by 2
+	    
+	    print("Shape Pool2:" + str(pool2.shape))
+	    
+	    #Apply Group Normalization
+	    x=norm(pool2, norm_type='group',is_train=True)
+	    print("Shape after GN:" + str(x.shape))
+	    
+	    #Flatten Pool 2
+	    pool2_flat = tf.reshape(x, [-1, int(x.shape[1]) * int(x.shape[2]) * int(x.shape[3])])
+	    
+	    #Dense Layer
+	    dense1 = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu6)
+	    
+	    #Dropout
+	    dropout = tf.layers.dropout(inputs=dense1, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+	    
+	    # Second Dense Layer
+	    dense2 = tf.layers.dense(inputs=dropout, units=256, activation=tf.nn.relu6)
+	    
+	    #Add Batch Normalization layer here
+		#     if mode==tf.estimator.ModeKeys.TRAIN:
+		#         batch_mean2, batch_var2 = tf.nn.moments(dropout,[0])
+		#         scale2 = tf.Variable(tf.ones([1024]))
+		#         beta2 = tf.Variable(tf.zeros([1024]))
+		#         dense2 = tf.nn.batch_normalization(dropout,batch_mean2,batch_var2,beta2,scale2,epsilon)
+		#     else:
+		#         dense2 = tf.layers.dense(inputs=dropout, units=256, activation=tf.nn.relu6)
+	    
+	    #Output layer final
+	    logits = tf.layers.dense(inputs=dense2, units=labels.shape[1])
+	    
+	    predictions = {
+	        "classes": tf.argmax(input=logits, axis=1),
+	        "probabilities": tf.nn.softmax(logits, name="softmax_tensor"),
+	        "logits":logits
+	    }
+	    
+	    # Predict Mode
+	    if mode==tf.estimator.ModeKeys.PREDICT:
+	        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
+	    
+	    # Loss Function
+	    loss = tf.losses.softmax_cross_entropy(onehot_labels=labels, logits=logits)
+	    loss = tf.identity(loss, name="loss")
+	    
+	    
+	    # Classification Metrics
+	    # accuracy
+	    acc  = tf.metrics.accuracy(labels=tf.argmax(labels,1), predictions=predictions['classes'])
+	    
+	    # Precision
+	    prec = tf.metrics.precision(labels=tf.argmax(labels,1), predictions=predictions['classes'])
+	    
+	    # Recall
+	    rec = tf.metrics.recall(labels=tf.argmax(labels,1), predictions=predictions['classes'])
+	    
+	    # F1 Score
+	    f1 = 2 * acc[1] * rec[1] /(prec[1] + rec[1]) 
+	    
+	    
+	    #TensorBoard Summary
+	    with tf.name_scope('summaries'):
+	        tf.summary.scalar('Accuracy', acc[1])
+	        tf.summary.scalar('Precision', prec[1])
+	        tf.summary.scalar('Recall', rec[1])
+	        tf.summary.scalar('F1Score', f1)
+	        tf.summary.scalar('loss', loss)
+	        tf.summary.histogram('Probabilities', predictions['probabilities'])
+	        tf.summary.histogram('Classes', predictions['classes'])
+	    
+	    summary_hook = tf.train.SummarySaverHook(summary_op=tf.summary.merge_all(),save_steps=1)
+	    
+	    # Learning Rate Decay (Exponential)
+	    learning_rate = tf.train.exponential_decay(learning_rate=1e-04,
+	                                               global_step=tf.train.get_global_step(),
+	                                               decay_steps=10000, 
+	                                               decay_rate=0.96, 
+	                                               staircase=True,
+	                                               name='lr_exp_decay')
+	    
+	    # Configure the Training Op (for TRAIN mode)
+	    if mode == tf.estimator.ModeKeys.TRAIN:
+	        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+	        train_op = optimizer.minimize(
+	            loss=loss,
+	            global_step=tf.train.get_global_step())
+	        return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
+	    
+	    
+	    # Evaluation Metrics
+	    eval_metric_ops = {
+	        "Accuracy": acc,
+	        "Precision": prec,
+	        "Recall": rec,
+	    }
+	    
+	    return tf.estimator.EstimatorSpec(mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)    
+
 	'''
 	Printing out the losses per step
 	- Number of steps kept at 1 
@@ -358,14 +515,14 @@ class genImageCl(object):
 	- With Batch Normalization used
 	- Storing and printing the Loss and the accuracy to be plotted, this can be plotted on tensorboard
 	'''
-	def run_model(self):
+	def _runModel(self):
 		# Rerun with larger number of steps
 		from collections import defaultdict
 		store_dict=defaultdict(dict)
 		config = tf.ConfigProto(log_device_placement=True)
 		loss_, accuracy_=[],[]
 
-		sat6_classifier = tf.estimator.Estimator(model_fn=self.cnn_model_bn_fn, model_dir="/home/sandeeppanku/Public/deleteme/deepsat-sat6/2",
+		sat6_classifier = tf.estimator.Estimator(model_fn=self.cnn_model_gn_fn, model_dir="/home/sandeeppanku/Public/deleteme/deepsat-sat6/3",
 		                                         config=tf.contrib.learn.RunConfig(session_config=config))
 		tensors_to_log={"probabilities":"softmax_tensor", "loss":"loss"}
 		loss_.append(tensors_to_log["loss"])
@@ -384,7 +541,7 @@ class genImageCl(object):
 		from tqdm import tqdm
 		for i in tqdm(range(20)):
 		    print(f"This is the {i} iteration")
-		    sat6_classifier.train(input_fn=train_input_fn, steps=600, hooks=[logging_hook])
+		    sat6_classifier.train(input_fn=train_input_fn, steps=630, hooks=[logging_hook])
 		    eval_results=sat6_classifier.evaluate(input_fn=eval_input_fn)
 		    print(f"Results for {i} iteration {eval_results}")
 		    store_dict.update(eval_results)
@@ -411,4 +568,4 @@ if __name__=="__main__":
 	gc.collect()
 	obj=genImageCl(path, h5path)
 	#obj._usingtfgpu()
-	obj.run_model()
+	obj._runModel()
