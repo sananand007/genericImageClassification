@@ -10,4 +10,4 @@ from imageCl import genImageCl
 #from tsp-local_2opt import Two_opt
 
 if __name__=="__main__":
-	print("Image Classification Tests")
+	print("Image Classification Tests, Run Only using TF and Create imageCl Object using h5paths and dataset Path")
