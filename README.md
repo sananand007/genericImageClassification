@@ -1,8 +1,8 @@
 ## Travis-Build
-
+[![Build Status](https://api.travis-ci.org/sananand007/genericImageClassification.png?branch=master)](https://travis-ci.org/sananand007/genericImageClassification)
 
 # GenericImageClassification
-Techniques of generic and optimized Image Classification using python and Tensorflow
+Techniques of generic and optimized Image Classification using python and Tensorflow-GPU
 
 ## Datasets
 
@@ -25,6 +25,7 @@ Techniques of generic and optimized Image Classification using python and Tensor
  * Linux Ubuntu 18.04
  * Tensorflow 1.12 with GPU enabled
  * CUDA 10 Toolkit with corresponding NVDIA drivers need to be installed
+ * I use a 1080Ti Nvidia GPU - currently state of the art, I do not use SLI, just 1 of these
 
 ## Implementing Image Classification.
 
@@ -36,3 +37,4 @@ Techniques of generic and optimized Image Classification using python and Tensor
 ## TODO
 
  * Try with bigger and varied datasets, such as imagenet also and compare performance
+ * I am integrating the COCO dataset, to train
