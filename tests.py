@@ -11,3 +11,4 @@ from imageCl import genImageCl
 
 if __name__=="__main__":
 	print("Image Classification Tests, Run Only using TF and Create imageCl Object using h5paths and dataset Path")
+	print("Image Classification Tests, Run Only using TF and Create Cifar10 Object to use CIFAR-10 as the dataset)

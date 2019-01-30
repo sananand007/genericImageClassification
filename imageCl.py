@@ -1,5 +1,6 @@
 '''
 Generic image Classification.
+ - The .h5 files can be created using "Paperspace"
  # TODO: Add more dataset
 '''
 
@@ -18,6 +19,7 @@ import h5py
 from collections import defaultdict
 from tensorflow.python.framework import ops
 from ops import norm
+from cifar import procCifar
 
 
 FLAGS=None
@@ -563,10 +565,17 @@ class genImageCl(object):
 		print(sess.run(c))
 
 if __name__=="__main__":
-	print(f"Entering the format")
-	path = '/home/sandeeppanku/Public/deleteme/deepsat-sat6/'
-	h5path = '/home/sandeeppanku/Public/Code/genericImageClassification/'
+	print(f"Entering the Main Function")
 	gc.collect()
-	obj=genImageCl(path, h5path)
+	runDeepsat6=input("Enter 1 or 0 for running deepsat-sat6 Dataset \n")
+	runCifar10=input("Enter 1 or 0 for running cifar-10 \n")
 	#obj._usingtfgpu()
-	obj._runModel()
+	if int(runDeepsat6)==1:
+		path = '/home/sandeeppanku/Public/deleteme/deepsat-sat6/'
+		h5path = '/home/sandeeppanku/Public/Code/genericImageClassification/'
+		obj=genImageCl(path, h5path)
+		obj._runModel()
+	elif int(runCifar10)==1:
+		path = '/home/sandeeppanku/Public/deleteme/cifar-10-python/'
+		obj=procCifar(path)
+		obj._unpickle()
