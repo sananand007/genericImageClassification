@@ -37,4 +37,4 @@ Techniques of generic and optimized Image Classification using python and Tensor
 ## TODO
 
  * Try with bigger and varied datasets, such as imagenet also and compare performance
- * I am integrating the COCO dataset, to train
+ * I am integrating the COCO and CIFAR-100 dataset, to train
